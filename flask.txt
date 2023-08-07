@@ -1,0 +1,105 @@
+from flask import Flask, request
+from flask import jsonify
+from flask_cors import CORS, cross_origin
+import tensorflow as tf
+import numpy as np
+import os
+import tensorflow as tf
+import numpy as np
+from tqdm import tqdm
+from tensorflow.keras.preprocessing import image
+import numpy as np
+import os
+from PIL import Image
+import io
+
+
+imageModel = tf.keras.models.load_model('behaviour.h5')
+
+app = Flask(__name__)
+CORS(app)
+
+
+def imagePrediction(image, target):
+    pred_img = image/255
+    
+    classes = ['age_20-25', 'age_25-30', 'age_30-35', 'gender_female', 'gender_male',
+       'isMarried_False', 'isMarried_True', 'race_Muslim', 'race_Sinhala',
+       'race_Tamil', 'religion_Buddhism', 'religion_Catholic',
+       'religion_Hindu', 'religion_Islam', 'color_Black', 'color_Blue',
+       'color_Brown', 'color_Cream', 'color_Gray', 'color_Pink', 'color_Red',
+       'color_White', 'color_Yellow', 'priceRange_0-2000',
+       'priceRange_2000-4000', 'priceRange_4000-6000', 'priceRange_6000-8000',
+       'district_Colombo', 'district_Gampaha', 'district_Kalutara',
+       'district_Kandy', 'district_Kurunegala']
+    proba = imageModel.predict(pred_img.reshape(1,400,400,3))
+    top_3 = np.argsort(proba[0])[:-4:-1]
+    predictions = []  # Initialize an empty array to store predictions
+
+    for i in range(3):
+        class_name = classes[top_3[i]]
+        probability = float(proba[0][top_3[i]])  # Convert to standard Python float
+        prediction = {"class": class_name, "probability": probability}
+        predictions.append(prediction)
+    # for i in range(3):
+    #     print("{}".format(classes[top_3[i]])+" ({:.3})".format(proba[0][top_3[i]]))
+    # plt.imshow(img)
+    data = {
+            "title": "Prediction Result",
+            "predictions": predictions
+            
+    }
+    response = flask.jsonify(data)
+
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    print(data)
+
+    return response
+
+@app.route('/')
+def hello_world():
+    return 'Hello, Flask World!'
+
+@app.route('/prediction', methods=['GET', 'POST'])
+def predict():
+    try:
+        if request.method == 'POST':
+            if flask.request.files.get("image"):
+                # result = ''
+                # print('request', request.files)
+                pred_image = request.files['image'].read()
+                # image = tf.keras.utils.load_img(pred_image, target_size=(400,400,3))
+                # input_arr = tf.keras.utils.img_to_array(image)
+                # input_arr = np.array([input_arr])  # Convert single image to a batch.
+                # print('done')
+                # predictions = model.predict(input_arr)
+
+                # return (result)
+                
+                img_stream = io.BytesIO(pred_image)
+
+                # Load the image using tf.keras.preprocessing.image.load_img
+                image = tf.keras.preprocessing.image.load_img(img_stream, target_size=(400, 400, 3))
+
+                # Convert the image to an array
+                # input_arr = tf.keras.preprocessing.image.img_to_array(image)
+                # input_arr = np.array([input_arr])  # Convert single image to a batch.
+                # result = imagePrediction(input_arr, (400,400,3))
+                
+                pred_image = request.files['image'].read()
+                pred_img = np.frombuffer(pred_image, np.uint8)
+                pred_img = np.reshape(pred_img, (400, 400, 3))
+                pred_img = pred_img / 255.0
+                
+                result = imagePrediction(pred_img, (400,400,3))
+                
+                print('done')
+                return (result)
+
+            return ({"status": false}) 
+    except Exception as e:
+        print(e)
+        return jsonify({"status": "error", "error_message": str(e)})
+
+if __name__ == '__main__':
+    app.run(port=3001)
